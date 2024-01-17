@@ -15,20 +15,26 @@ import utils
 import torch
 from dm_env import specs
 
-import dmc
+import adroit
 
 from logger import Logger
 from replay_buffer import ReplayBufferStorage, make_replay_loader
 from video import TrainVideoRecorder, VideoRecorder
 import wandb
+import math
 import re
 
 torch.backends.cudnn.benchmark = True
 
 
-def make_agent(obs_spec, action_spec, cfg):
+def make_agent(obs_spec, action_spec, cfg, obs_sensor_spec=None):
     cfg.obs_shape = obs_spec.shape
     cfg.action_shape = action_spec.shape
+    cfg.use_sensor = True if obs_sensor_spec is not None else False
+    if obs_sensor_spec is not None:
+        cfg.state_dim = obs_sensor_spec.shape[0]
+    else:
+        cfg.state_dim = 1
     return hydra.utils.instantiate(cfg)
 
 
@@ -49,8 +55,15 @@ class Workspace:
         self._discount = cfg.discount
         self._nstep = cfg.nstep
         self.setup()
-        self.agent = make_agent(self.train_env.observation_spec(),
-                                self.train_env.action_spec(), self.cfg.agent)
+        try:
+            self.agent = make_agent(self.train_env.observation_spec(),
+                                    self.train_env.action_spec(), 
+                                    self.cfg.agent,
+                                    self.train_env.observation_sensor_spec())
+        except:
+            self.agent = make_agent(self.train_env.observation_spec(),
+                                    self.train_env.action_spec(), 
+                                    self.cfg.agent)
         self.timer = utils.Timer()
         self._global_step = 0
         self._global_episode = 0
@@ -61,15 +74,17 @@ class Workspace:
                              use_tb=self.cfg.use_tb,
                              use_wandb=self.cfg.use_wandb)
         # create envs
-        self.train_env = dmc.make(self.cfg.task_name, self.cfg.frame_stack,
-                                  self.cfg.action_repeat, self.cfg.seed)
-        self.eval_env = dmc.make(self.cfg.task_name, self.cfg.frame_stack,
-                                 self.cfg.action_repeat, self.cfg.seed)
+        self.train_env = adroit.make(self.cfg.task_name, self.cfg.frame_stack,
+                                self.cfg.action_repeat, self.cfg.seed, self.device)
+        self.eval_env = adroit.make(self.cfg.task_name, self.cfg.frame_stack,
+                                self.cfg.action_repeat, self.cfg.seed, self.device)
+        
         # create replay buffer
         data_specs = (self.train_env.observation_spec(),
-                      self.train_env.action_spec(),
-                      specs.Array((1, ), np.float32, 'reward'),
-                      specs.Array((1, ), np.float32, 'discount'))
+                    self.train_env.observation_sensor_spec(),
+                    self.train_env.action_spec(),
+                    specs.Array((1, ), np.float32, 'reward'),
+                    specs.Array((1, ), np.float32, 'discount'))
 
         self.replay_storage = ReplayBufferStorage(data_specs,
                                                   self.work_dir / 'buffer')
@@ -106,29 +121,49 @@ class Workspace:
 
     def eval(self):
         step, episode, total_reward = 0, 0, 0
-        eval_until_episode = utils.Until(self.cfg.num_eval_episodes)
-
+        n_eval_episode = self.cfg.num_eval_episodes
+        eval_until_episode = utils.Until(n_eval_episode)
+        total_success = 0.0
         while eval_until_episode(episode):
+            n_goal_achieved_total = 0
             time_step = self.eval_env.reset()
             self.video_recorder.init(self.eval_env, enabled=(episode == 0))
             while not time_step.last():
                 with torch.no_grad(), utils.eval_mode(self.agent):
-                    action = self.agent.act(time_step.observation,
+                    observation = time_step.observation
+                    action = self.agent.act(observation,
                                             self.global_step,
-                                            eval_mode=True)
+                                            eval_mode=True,
+                                            obs_sensor=time_step.observation_sensor)
                 time_step = self.eval_env.step(action)
+                n_goal_achieved_total += time_step.n_goal_achieved
                 self.video_recorder.record(self.eval_env)
                 total_reward += time_step.reward
                 step += 1
 
+            # here check if success for Adroit tasks. The threshold values come from the mj_envs code
+            # e.g. https://github.com/ShahRutav/mj_envs/blob/5ee75c6e294dda47983eb4c60b6dd8f23a3f9aec/mj_envs/hand_manipulation_suite/pen_v0.py
+            # can also use the evaluate_success function from Adroit envs, but can be more complicated
+            if self.cfg.task_name == 'pen':
+                threshold = 20
+            else:
+                threshold = 25
+            if n_goal_achieved_total > threshold:
+                total_success += 1
+
             episode += 1
             self.video_recorder.save(f'{self.global_frame}.mp4')
+        success_rate_standard = total_success / n_eval_episode
+        episode_reward_standard = total_reward / episode
+        episode_length_standard = step * self.cfg.action_repeat / episode
 
         with self.logger.log_and_dump_ctx(self.global_frame, ty='eval') as log:
-            log('episode_reward', total_reward / episode)
-            log('episode_length', step * self.cfg.action_repeat / episode)
+            log('episode_reward', episode_reward_standard)
+            log('success_rate', success_rate_standard)
+            log('episode_length', episode_length_standard)
             log('episode', self.global_episode)
             log('step', self.global_step)
+
 
     def train(self):
         # predicates
@@ -181,9 +216,15 @@ class Workspace:
 
             # sample action
             with torch.no_grad(), utils.eval_mode(self.agent):
-                action = self.agent.act(time_step.observation,
-                                        self.global_step,
-                                        eval_mode=False)
+                try:
+                    action = self.agent.act(time_step.observation,
+                                            self.global_step,
+                                            eval_mode=False,
+                                            obs_sensor=time_step.observation_sensor)
+                except:
+                    action = self.agent.act(time_step.observation,
+                                            self.global_step,
+                                            eval_mode=False)
 
             # try to update the agent
             if not seed_until_step(self.global_step):
@@ -218,7 +259,7 @@ class Workspace:
 
 @hydra.main(config_path='cfgs', config_name='config')
 def main(cfgs):
-    from train_dmc import Workspace as W
+    from train_adroit import Workspace as W
     root_dir = Path.cwd()
     workspace = W(cfgs)
     snapshot = root_dir / 'snapshot.pt'

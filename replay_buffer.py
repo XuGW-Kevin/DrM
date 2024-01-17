@@ -152,17 +152,16 @@ class ReplayBuffer(IterableDataset):
             step_reward = episode['reward'][idx + i]
             reward += discount * step_reward
             discount *= episode['discount'][idx + i] * self._discount
-        return (obs, action, reward, discount, next_obs)
+        if 'observation_sensor' in episode.keys():
+            obs_sensor = episode['observation_sensor'][idx - 1]
+            next_obs_sensor = episode['observation_sensor'][idx + self._nstep - 1]
+            return (obs, action, reward, discount, next_obs, obs_sensor, next_obs_sensor)
+        else:
+            return (obs, action, reward, discount, next_obs)
 
     def __iter__(self):
         while True:
             yield self._sample()
-
-    def update_nstep(self, new_nstep):
-        self._nstep = new_nstep
-
-    def update_discount(self, new_discount):
-        self._discount = new_discount
 
 
 def _worker_init_fn(worker_id):

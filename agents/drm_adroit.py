@@ -64,8 +64,33 @@ class Encoder(nn.Module):
         return h
 
 
+class StateEncoder(nn.Module):
+    def __init__(self, state_dim, hidden_dim, feature_dim, use_sensor):
+        super().__init__()
+        self.state_encoder = nn.Sequential(
+            nn.Linear(state_dim, hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(hidden_dim, feature_dim),
+        )
+        
+        self.fusion = nn.Sequential(
+            nn.Linear(feature_dim, hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(hidden_dim, feature_dim),
+        )
+        self.use_sensor = use_sensor
+    
+    def forward(self, h, state=None):
+        if self.use_sensor:
+            state_en = self.state_encoder(state)
+            h = h + state_en
+            return self.fusion(h)
+        else:
+            return h
+
+
 class Actor(nn.Module):
-    def __init__(self, repr_dim, action_shape, feature_dim, hidden_dim):
+    def __init__(self, repr_dim, action_shape, feature_dim, hidden_dim,  use_sensor, state_dim):
         super().__init__()
 
         self.trunk = nn.Sequential(nn.Linear(repr_dim, feature_dim),
@@ -76,12 +101,16 @@ class Actor(nn.Module):
                                     nn.Linear(hidden_dim, hidden_dim),
                                     nn.ReLU(inplace=True),
                                     nn.Linear(hidden_dim, action_shape[0]))
+        
+        self.state_enc = StateEncoder(state_dim, hidden_dim, feature_dim, use_sensor)
+        self.use_sensor = use_sensor
 
         self.apply(utils.weight_init)
 
-    def forward(self, obs, std):
+    def forward(self, obs, std, obs_sensor=None):
         h = self.trunk(obs)
-
+        h = self.state_enc(h, obs_sensor)
+        
         mu = self.policy(h)
         mu = torch.tanh(mu)
         std = torch.ones_like(mu) * std
@@ -91,12 +120,13 @@ class Actor(nn.Module):
 
 
 class Critic(nn.Module):
-    def __init__(self, repr_dim, action_shape, feature_dim, hidden_dim):
+    def __init__(self, repr_dim, action_shape, feature_dim, hidden_dim,  use_sensor, state_dim):
         super().__init__()
 
         self.trunk = nn.Sequential(nn.Linear(repr_dim, feature_dim),
                                    nn.LayerNorm(feature_dim), nn.Tanh())
-
+        self.state_enc = StateEncoder(state_dim, hidden_dim, feature_dim, use_sensor)
+        
         self.Q1 = nn.Sequential(
             nn.Linear(feature_dim + action_shape[0], hidden_dim),
             nn.ReLU(inplace=True), nn.Linear(hidden_dim, hidden_dim),
@@ -106,20 +136,22 @@ class Critic(nn.Module):
             nn.Linear(feature_dim + action_shape[0], hidden_dim),
             nn.ReLU(inplace=True), nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(inplace=True), nn.Linear(hidden_dim, 1))
+        self.use_sensor = use_sensor
 
         self.apply(utils.weight_init)
 
-    def forward(self, obs, action):
+    def forward(self, obs, action, obs_sensor=None):
         h = self.trunk(obs)
+        h = self.state_enc(h, obs_sensor)
+        
         h_action = torch.cat([h, action], dim=-1)
         q1 = self.Q1(h_action)
         q2 = self.Q2(h_action)
 
         return q1, q2
-
-
+    
 class VNetwork(nn.Module):
-    def __init__(self, repr_dim, feature_dim, hidden_dim):
+    def __init__(self, repr_dim, feature_dim, hidden_dim, use_sensor, state_dim):
         super().__init__()
 
         self.trunk = nn.Sequential(nn.Linear(repr_dim, feature_dim),
@@ -129,11 +161,14 @@ class VNetwork(nn.Module):
                                nn.ReLU(inplace=True),
                                nn.Linear(hidden_dim, hidden_dim),
                                nn.ReLU(inplace=True), nn.Linear(hidden_dim, 1))
+        self.state_enc = StateEncoder(state_dim, hidden_dim, feature_dim, use_sensor)
+        self.use_sensor = use_sensor
 
         self.apply(utils.weight_init)
 
-    def forward(self, obs):
+    def forward(self, obs, obs_sensor=None):
         h = self.trunk(obs)
+        h = self.state_enc(h, obs_sensor)
         v = self.V(h)
         return v
 
@@ -141,10 +176,11 @@ class VNetwork(nn.Module):
 class DrMAgent:
     def __init__(self, obs_shape, action_shape, device, lr, feature_dim,
                  hidden_dim, critic_target_tau, dormant_threshold,
-                 target_dormant_ratio, dormant_temp, target_lambda,
-                 lambda_temp, dormant_perturb_interval, min_perturb_factor,
-                 max_perturb_factor, perturb_rate, num_expl_steps, stddev_type,
-                 stddev_schedule, stddev_clip, expectile, use_tb):
+                 target_dormant_ratio,  dormant_temp,
+                 target_lambda, lambda_temp, dormant_perturb_interval,
+                 min_perturb_factor, max_perturb_factor, perturb_rate,
+                 num_expl_steps, stddev_type, stddev_schedule, stddev_clip,
+                 expectile, use_tb, use_sensor=False, state_dim=None):
         self.device = device
         self.critic_target_tau = critic_target_tau
         self.use_tb = use_tb
@@ -164,17 +200,20 @@ class DrMAgent:
         self.perturb_rate = perturb_rate
         self.expectile = expectile
         self.awaken_step = None
+        self.use_sensor = use_sensor
+        self.state_dim = state_dim
 
         # models
         self.encoder = Encoder(obs_shape).to(device)
         self.actor = Actor(self.encoder.repr_dim, action_shape, feature_dim,
-                           hidden_dim).to(device)
+                           hidden_dim, use_sensor, state_dim).to(device)
         self.value_predictor = VNetwork(self.encoder.repr_dim, feature_dim,
-                                        hidden_dim).to(device)
+                                        hidden_dim, use_sensor, state_dim).to(device)
+
         self.critic = Critic(self.encoder.repr_dim, action_shape, feature_dim,
-                             hidden_dim).to(device)
+                             hidden_dim,  use_sensor, state_dim).to(device)
         self.critic_target = Critic(self.encoder.repr_dim, action_shape,
-                                    feature_dim, hidden_dim).to(device)
+                                    feature_dim, hidden_dim, use_sensor, state_dim).to(device)
         self.critic_target.load_state_dict(self.critic.state_dict())
 
         # optimizers
@@ -191,28 +230,13 @@ class DrMAgent:
         self.critic_target.train()
 
     @property
-    def dormant_stddev(self):
+    def stddev(self):
         return 1 / (1 +
                     math.exp(-self.dormant_temp *
                              (self.dormant_ratio - self.target_dormant_ratio)))
 
-    def stddev(self, step):
-        if self.stddev_type == "max":
-            return max(utils.schedule(self.stddev_schedule, step), self.stddev)
-        elif self.stddev_type == "dormant":
-            return self.dormant_stddev
-        elif self.stddev_type == "awake":
-            if self.awaken_step == None:
-                return self.dormant_stddev
-            else:
-                return max(
-                    self.dormant_stddev,
-                    utils.schedule(self.stddev_schedule,
-                                   step - self.awaken_step))
-        else:
-            raise NotImplementedError(self.stddev_type)
-
-    def perturb_factor(self, step):
+    @property
+    def perturb_factor(self):
         return min(max(self.min_perturb_factor, 1 - self.perturb_rate * self.dormant_ratio), self.max_perturb_factor)
 
     @property
@@ -228,10 +252,32 @@ class DrMAgent:
         self.critic.train(training)
         self.value_predictor.train(training)
 
-    def act(self, obs, step, eval_mode):
+    def act(self, obs, step, eval_mode, obs_sensor=None):
         obs = torch.as_tensor(obs, device=self.device)
         obs = self.encoder(obs.unsqueeze(0))
-        dist = self.actor(obs, self.stddev(step))
+        
+        if obs_sensor is not None:
+            obs_sensor = torch.as_tensor(obs_sensor, device=self.device)
+        
+        if self.stddev_type == "drqv2":
+            stddev = utils.schedule(self.stddev_schedule, step)
+        elif self.stddev_type == "max":
+            stddev = max(utils.schedule(self.stddev_schedule, step),
+                         self.stddev)
+        elif self.stddev_type == "dormant":
+            stddev = self.stddev
+        elif self.stddev_type == "awake":
+            if self.awaken_step == None:
+                stddev = self.stddev
+            else:
+                stddev = max(
+                    self.stddev,
+                    utils.schedule(self.stddev_schedule,
+                                   step - self.awaken_step))
+        else:
+            raise NotImplementedError(self.stddev_type)
+
+        dist = self.actor(obs, stddev, obs_sensor)
         if eval_mode:
             action = dist.mean
         else:
@@ -240,12 +286,18 @@ class DrMAgent:
                 action.uniform_(-1.0, 1.0)
         return action.cpu().numpy()[0]
 
-    def update_predictor(self, obs, action):
+    def update_predictor(self, obs, action, obs_sensor=None):
         metrics = dict()
 
-        Q1, Q2 = self.critic(obs, action)
+        if obs_sensor is None:
+            Q1, Q2 = self.critic(obs, action)
+        else:
+            Q1, Q2 = self.critic(obs, action, obs_sensor)
         Q = torch.min(Q1, Q2)
-        V = self.value_predictor(obs)
+        if obs_sensor is None:
+            V = self.value_predictor(obs)
+        else:
+            V = self.value_predictor(obs, obs_sensor)
         vf_err = V - Q
         vf_sign = (vf_err > 0).float()
         vf_weight = (1 - vf_sign) * self.expectile + vf_sign * (1 -
@@ -261,20 +313,50 @@ class DrMAgent:
 
         return metrics
 
-    def update_critic(self, obs, action, reward, discount, next_obs, step):
+    def update_critic(self, obs, action, reward, discount, next_obs, 
+                    step, obs_sensor=None, next_obs_sensor=None):
         metrics = dict()
 
         with torch.no_grad():
-            dist = self.actor(next_obs, self.stddev(step))
+            if self.stddev_type == "drqv2":
+                stddev = utils.schedule(self.stddev_schedule, step)
+            elif self.stddev_type == "max":
+                stddev = max(utils.schedule(self.stddev_schedule, step),
+                             self.stddev)
+            elif self.stddev_type == "dormant":
+                stddev = self.stddev
+            elif self.stddev_type == "awake":
+                if self.awaken_step == None:
+                    stddev = self.stddev
+                else:
+                    stddev = max(
+                        self.stddev,
+                        utils.schedule(self.stddev_schedule,
+                                       step - self.awaken_step))
+            else:
+                raise NotImplementedError(self.stddev_type)
+            if next_obs_sensor is None:
+                dist = self.actor(next_obs, stddev)
+            else:
+                dist = self.actor(next_obs, stddev, next_obs_sensor)
             next_action = dist.sample(clip=self.stddev_clip)
-            target_Q1, target_Q2 = self.critic_target(next_obs, next_action)
+            if next_obs_sensor is None:
+                target_Q1, target_Q2 = self.critic_target(next_obs, next_action)
+            else:
+                target_Q1, target_Q2 = self.critic_target(next_obs, next_action, next_obs_sensor)
             target_V_explore = torch.min(target_Q1, target_Q2)
-            target_V_exploit = self.value_predictor(next_obs)
+            if next_obs_sensor is None:
+                target_V_exploit = self.value_predictor(next_obs)
+            else:
+                target_V_exploit = self.value_predictor(next_obs, next_obs_sensor)
             target_V = self.lambda_ * target_V_exploit + (
                 1 - self.lambda_) * target_V_explore
             target_Q = reward + (discount * target_V)
 
-        Q1, Q2 = self.critic(obs, action)
+        if obs_sensor is None:
+            Q1, Q2 = self.critic(obs, action)
+        else:
+            Q1, Q2 = self.critic(obs, action, obs_sensor)
         critic_loss = F.mse_loss(Q1, target_Q) + F.mse_loss(Q2, target_Q)
 
         if self.use_tb:
@@ -292,12 +374,35 @@ class DrMAgent:
 
         return metrics
 
-    def update_actor(self, obs, step):
+    def update_actor(self, obs, step, obs_sensor):
         metrics = dict()
-        dist = self.actor(obs, self.stddev(step))
+        if self.stddev_type == "drqv2":
+            stddev = utils.schedule(self.stddev_schedule, step)
+        elif self.stddev_type == "max":
+            stddev = max(utils.schedule(self.stddev_schedule, step),
+                         self.stddev)
+        elif self.stddev_type == "dormant":
+            stddev = self.stddev
+        elif self.stddev_type == "awake":
+            if self.awaken_step == None:
+                stddev = self.stddev
+            else:
+                stddev = max(
+                    self.stddev,
+                    utils.schedule(self.stddev_schedule,
+                                   step - self.awaken_step))
+        else:
+            raise NotImplementedError(self.stddev_type)
+        if obs_sensor is None:
+            dist = self.actor(obs, stddev)
+        else:
+            dist = self.actor(obs, stddev, obs_sensor)
         action = dist.sample(clip=self.stddev_clip)
         log_prob = dist.log_prob(action).sum(-1, keepdim=True)
-        Q1, Q2 = self.critic(obs, action)
+        if obs_sensor is None:
+            Q1, Q2 = self.critic(obs, action)
+        else:
+            Q1, Q2 = self.critic(obs, action, obs_sensor)
         Q = torch.min(Q1, Q2)
 
         actor_loss = -Q.mean()
@@ -314,25 +419,29 @@ class DrMAgent:
 
         return metrics
 
-    def perturb(self, step):
-        utils.perturb(self.actor, self.actor_opt, self.perturb_factor(step))
-        utils.perturb(self.critic, self.critic_opt, self.perturb_factor(step))
-        utils.perturb(self.critic_target, self.critic_opt,
-                      self.perturb_factor(step))
-        utils.perturb(self.encoder, self.encoder_opt,
-                      self.perturb_factor(step))
-        utils.perturb(self.value_predictor, self.predictor_opt,
-                      self.perturb_factor(step))
+    def reset(self):
+        utils.reset(self.actor, self.actor_opt, self.perturb_factor)
+        utils.reset(self.critic, self.critic_opt, self.perturb_factor)
+        utils.reset(self.critic_target, self.critic_opt, self.perturb_factor)
+        utils.reset(self.encoder, self.encoder_opt, self.perturb_factor)
+        utils.reset(self.value_predictor, self.predictor_opt,
+                    self.perturb_factor)
 
     def update(self, replay_iter, step):
         metrics = dict()
 
-        if step % self.dormant_perturb_interval == 0:
-            self.perturb(step)
+        # if step % self.dormant_perturb_interval == 0:
+        #     self.reset()
 
         batch = next(replay_iter)
-        obs, action, reward, discount, next_obs = utils.to_torch(
-            batch, self.device)
+        if self.use_sensor:
+            obs, action, reward, discount, next_obs, obs_sensor, next_obs_sensor = utils.to_torch(
+                batch, self.device)
+        else:
+            obs, action, reward, discount, next_obs = utils.to_torch(
+                batch, self.device)
+            obs_sensor = None
+            next_obs_sensor = None
 
         # augment
         obs = self.aug(obs.float())
@@ -344,24 +453,24 @@ class DrMAgent:
 
         # calculate dormant ratio
         self.dormant_ratio = utils.cal_dormant_ratio(
-            self.actor, obs.detach(), 0, percentage=self.dormant_threshold)
-
+            self.actor, obs.detach(), 0, obs_sensor, percentage=self.dormant_threshold)
+        metrics['actor_dormant_ratio'] = self.dormant_ratio
+        
         if self.awaken_step is None and step > self.num_expl_steps and self.dormant_ratio < self.target_dormant_ratio:
             self.awaken_step = step
 
         if self.use_tb:
             metrics['batch_reward'] = reward.mean().item()
-        metrics['actor_dormant_ratio'] = self.dormant_ratio
 
-        # update predictor
-        metrics.update(self.update_predictor(obs.detach(), action))
+        # # update predictor
+        metrics.update(self.update_predictor(obs.detach(), action, obs_sensor))
 
         # update critic
         metrics.update(
-            self.update_critic(obs, action, reward, discount, next_obs, step))
+            self.update_critic(obs, action, reward, discount, next_obs, step, obs_sensor, next_obs_sensor))
 
         # update actor
-        metrics.update(self.update_actor(obs.detach(), step))
+        metrics.update(self.update_actor(obs.detach(), step, obs_sensor))
 
         # update critic target
         utils.soft_update_params(self.critic, self.critic_target,

@@ -1,6 +1,8 @@
 # DrM
 DrM, a visual RL algorithm, minimizes the dormant ratio to guide exploration-exploitation trade-offs, achieving significant improvements in sample efficiency and asymptotic performance across diverse domains.
 
+![image](https://xugw-kevin.github.io/drm/asset/title.mp4)
+
 ## Installation
 ```bash
 sudo apt update
@@ -12,6 +14,14 @@ cd metaworld
 pip install -e .
 cd ..
 cd mujoco-py
+pip install -e .
+cd ..
+cd rrl-dependencies
+pip install -e .
+cd mj_envs
+pip install -e .
+cd ..
+cd mjrl
 pip install -e .
 ```
 
@@ -27,6 +37,12 @@ If you run DrM on [MetaWorld](https://meta-world.github.io/), please use train_m
 ```bash
 python train_mw.py task=sweep-into agent=drm
 python train_mw_sparse.py task=soccer agent=drm
+```
+
+If you run DrM on Adroit, please use train_adroit.py to train DrM policies on different configs.
+
+```bash
+python train_adroit.py task=pen agent=drm_adroit
 ```
 
 ## Acknowledgement

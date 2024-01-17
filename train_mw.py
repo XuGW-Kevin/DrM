@@ -40,7 +40,7 @@ class Workspace:
         if self.cfg.use_wandb:
             exp_name = '_'.join([cfg.task_name, str(cfg.seed)])
             group_name = re.search(r'\.(.+)\.', cfg.agent._target_).group(1)
-            wandb.init(project="VRLbaseline",
+            wandb.init(project="DrM",
                        group=group_name,
                        name=exp_name,
                        config=cfg)
