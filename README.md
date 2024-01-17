@@ -19,7 +19,7 @@ pip install -e .
 If you run DrM on [DeepMind Control Suite](https://github.com/google-deepmind/dm_control), please use train_dmc.py to train DrM policies on different configs.
 
 ```bash
-python train_dmc.py task=quadruped_walk agent=drm
+python train_dmc.py task=dog_walk agent=drm
 ```
 
 If you run DrM on [MetaWorld](https://meta-world.github.io/), please use train_mw.py to train DrM policies on different configs.
