@@ -1,0 +1,14 @@
+{
+    "Registrations": [
+        {
+            "Component": {
+                "Type": "git",
+                "Git": {
+                  "RepositoryUrl": "https://github.com/Farama-Foundation/Metaworld",
+                  "CommitHash": "a0009ed9a208ff9864a5c1368c04c273bb20dd06"
+                }
+            },
+            "DevelopmentDependency": false
+        },
+    ]
+}

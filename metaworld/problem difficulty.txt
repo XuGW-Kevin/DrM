@@ -1,0 +1,29 @@
+EASY:
+
+button press
+push
+reach
+plate slide
+handle press
+
+
+MEDIUM:
+
+button press wall
+disassembly
+pick-place
+disassembly
+
+
+HARD:
+
+assembly
+window open
+basketball
+hand insert
+door unlock
+shelf place
+
+
+
+

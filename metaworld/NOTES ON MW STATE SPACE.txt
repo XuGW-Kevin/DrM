@@ -1,0 +1,13 @@
+Obs:
+
+X0-X2 -- eef POS
+X3 -- GRIPPER open/close
+
+X4 - X17 -- (3-D xpos, 4-D qpos) of two objects 
+
+X18-X20 -- prev eef POS
+X21 -- prev GRIPPER open/close
+
+X22 - X35 -- (3-D xpos, 4-D qpos) of two objects 
+
+X36 -- X38 -- desired goal pos.

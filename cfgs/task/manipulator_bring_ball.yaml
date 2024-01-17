@@ -1,0 +1,6 @@
+defaults:
+  - hard
+  - _self_
+
+task_name: manipulator_bring_ball
+lr: 8e-5
