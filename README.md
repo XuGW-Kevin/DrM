@@ -1,7 +1,10 @@
 # DrM
-DrM, a visual RL algorithm, minimizes the dormant ratio to guide exploration-exploitation trade-offs, achieving significant improvements in sample efficiency and asymptotic performance across diverse domains.
-
-![image](images/title.gif)
+[[Project Website]](https://drm-rl.github.io/)
+[[Paper]](https://arxiv.org/abs/2310.19668)
+This repository is the original PyTorch implementation of **DrM**. **DrM**, a visual Reinforcement learning algorithm, minimizes the dormant ratio to guide exploration-exploitation trade-offs, achieves remarkable significant sample efficiency and asymptotic performance in the hardest locomotion and manipulation tasks.
+<p align="center">
+  <br><img src='images/title.gif' width="500"/><br>
+</p>
 
 # 🛠️ Installation Instructions
 First, create a virtual environment and install all required packages. 
@@ -65,5 +68,5 @@ url={https://openreview.net/forum?id=MSe8YFbhUE}
 }
 ```
 
-## Acknowledgement
+## 🙏 Acknowledgement
 DrM is licensed under the MIT license. MuJoCo and DeepMind Control Suite are licensed under the Apache 2.0 license. We would like to thank DrQ-v2 authors for open-sourcing the [DrQv2](https://github.com/facebookresearch/drqv2) codebase. Our implementation builds on top of their repository.
