@@ -1,5 +1,5 @@
 # DrM: Mastering Visual Reinforcement Learning through Dormant Ratio Minimization
-<p align="center" style="font-size: 50px;">
+<p align="center" style="font-size: 50px">
    <a href="https://arxiv.org/abs/2310.19668">[Paper]</a>&emsp;<a href="https://drm-rl.github.io/">[Project Website]</a>
 </p>
 
