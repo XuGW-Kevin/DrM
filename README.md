@@ -1,7 +1,8 @@
 # DrM
 [[Project Website]](https://drm-rl.github.io/)
 [[Paper]](https://arxiv.org/abs/2310.19668)
-This repository is the original PyTorch implementation of **DrM**. **DrM**, a visual Reinforcement learning algorithm, minimizes the dormant ratio to guide exploration-exploitation trade-offs, achieves remarkable significant sample efficiency and asymptotic performance in the hardest locomotion and manipulation tasks.
+
+This repository is the official PyTorch implementation of **DrM**. **DrM**, a visual Reinforcement learning algorithm, minimizes the dormant ratio to guide exploration-exploitation trade-offs, achieves remarkable significant sample efficiency and asymptotic performance in the hardest locomotion and manipulation tasks.
 <p align="center">
   <br><img src='images/title.gif' width="500"/><br>
 </p>
