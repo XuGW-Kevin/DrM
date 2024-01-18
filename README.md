@@ -1,7 +1,7 @@
 # DrM
 DrM, a visual RL algorithm, minimizes the dormant ratio to guide exploration-exploitation trade-offs, achieving significant improvements in sample efficiency and asymptotic performance across diverse domains.
 
-![image](https://xugw-kevin.github.io/drm/asset/title.mp4)
+![image](images/title.gif)
 
 ## Installation
 ```bash
