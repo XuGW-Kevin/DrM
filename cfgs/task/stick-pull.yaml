@@ -3,3 +3,5 @@ defaults:
   - _self_
 
 task_name: stick-pull
+agent:
+  max_perturb_factor: 0.9

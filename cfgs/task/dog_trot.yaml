@@ -5,3 +5,5 @@ defaults:
 task_name: dog_trot
 lr: 8e-5
 feature_dim: 100
+agent:
+  max_perturb_factor: 0.9

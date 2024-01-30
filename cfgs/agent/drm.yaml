@@ -12,7 +12,7 @@ agent:
   lambda_temp: 50
   dormant_perturb_interval: 100000
   min_perturb_factor: 0.2
-  max_perturb_factor: 0.9
+  max_perturb_factor: ??? # to be specified later
   perturb_rate: 2
   use_tb: ${use_tb}
   num_expl_steps: 2000
