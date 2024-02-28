@@ -1,0 +1,8 @@
+defaults:
+  - medium
+  - _self_
+
+task_name: walker_run
+batch_size: 512
+agent:
+  max_perturb_factor: 0.9

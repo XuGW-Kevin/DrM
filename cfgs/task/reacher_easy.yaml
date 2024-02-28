@@ -1,0 +1,7 @@
+defaults:
+  - medium
+  - _self_
+
+task_name: reacher_easy
+agent:
+  max_perturb_factor: 0.9
