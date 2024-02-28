@@ -4,3 +4,4 @@ defaults:
 
 domain: adroit
 task_name: door
+expectile: 0.6

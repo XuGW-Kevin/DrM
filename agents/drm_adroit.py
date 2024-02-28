@@ -65,7 +65,7 @@ class Encoder(nn.Module):
 
 
 class StateEncoder(nn.Module):
-    def __init__(self, state_dim, hidden_dim, feature_dim, use_sensor):
+    def __init__(self, state_dim, hidden_dim, feature_dim):
         super().__init__()
         self.state_encoder = nn.Sequential(
             nn.Linear(state_dim, hidden_dim),
@@ -78,19 +78,15 @@ class StateEncoder(nn.Module):
             nn.ReLU(inplace=True),
             nn.Linear(hidden_dim, feature_dim),
         )
-        self.use_sensor = use_sensor
     
     def forward(self, h, state=None):
-        if self.use_sensor:
-            state_en = self.state_encoder(state)
-            h = h + state_en
-            return self.fusion(h)
-        else:
-            return h
+        state_en = self.state_encoder(state)
+        h = h + state_en
+        return self.fusion(h)
 
 
 class Actor(nn.Module):
-    def __init__(self, repr_dim, action_shape, feature_dim, hidden_dim,  use_sensor, state_dim):
+    def __init__(self, repr_dim, action_shape, feature_dim, hidden_dim,  state_dim):
         super().__init__()
 
         self.trunk = nn.Sequential(nn.Linear(repr_dim, feature_dim),
@@ -102,8 +98,7 @@ class Actor(nn.Module):
                                     nn.ReLU(inplace=True),
                                     nn.Linear(hidden_dim, action_shape[0]))
         
-        self.state_enc = StateEncoder(state_dim, hidden_dim, feature_dim, use_sensor)
-        self.use_sensor = use_sensor
+        self.state_enc = StateEncoder(state_dim, hidden_dim, feature_dim)
 
         self.apply(utils.weight_init)
 
@@ -120,12 +115,12 @@ class Actor(nn.Module):
 
 
 class Critic(nn.Module):
-    def __init__(self, repr_dim, action_shape, feature_dim, hidden_dim,  use_sensor, state_dim):
+    def __init__(self, repr_dim, action_shape, feature_dim, hidden_dim, state_dim):
         super().__init__()
 
         self.trunk = nn.Sequential(nn.Linear(repr_dim, feature_dim),
                                    nn.LayerNorm(feature_dim), nn.Tanh())
-        self.state_enc = StateEncoder(state_dim, hidden_dim, feature_dim, use_sensor)
+        self.state_enc = StateEncoder(state_dim, hidden_dim, feature_dim)
         
         self.Q1 = nn.Sequential(
             nn.Linear(feature_dim + action_shape[0], hidden_dim),
@@ -136,7 +131,6 @@ class Critic(nn.Module):
             nn.Linear(feature_dim + action_shape[0], hidden_dim),
             nn.ReLU(inplace=True), nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(inplace=True), nn.Linear(hidden_dim, 1))
-        self.use_sensor = use_sensor
 
         self.apply(utils.weight_init)
 
@@ -151,7 +145,7 @@ class Critic(nn.Module):
         return q1, q2
     
 class VNetwork(nn.Module):
-    def __init__(self, repr_dim, feature_dim, hidden_dim, use_sensor, state_dim):
+    def __init__(self, repr_dim, feature_dim, hidden_dim, state_dim):
         super().__init__()
 
         self.trunk = nn.Sequential(nn.Linear(repr_dim, feature_dim),
@@ -161,8 +155,7 @@ class VNetwork(nn.Module):
                                nn.ReLU(inplace=True),
                                nn.Linear(hidden_dim, hidden_dim),
                                nn.ReLU(inplace=True), nn.Linear(hidden_dim, 1))
-        self.state_enc = StateEncoder(state_dim, hidden_dim, feature_dim, use_sensor)
-        self.use_sensor = use_sensor
+        self.state_enc = StateEncoder(state_dim, hidden_dim, feature_dim)
 
         self.apply(utils.weight_init)
 
@@ -180,7 +173,7 @@ class DrMAgent:
                  target_lambda, lambda_temp, dormant_perturb_interval,
                  min_perturb_factor, max_perturb_factor, perturb_rate,
                  num_expl_steps, stddev_type, stddev_schedule, stddev_clip,
-                 expectile, use_tb, use_sensor=False, state_dim=None):
+                 expectile, use_tb, state_dim=None):
         self.device = device
         self.critic_target_tau = critic_target_tau
         self.use_tb = use_tb
@@ -200,20 +193,19 @@ class DrMAgent:
         self.perturb_rate = perturb_rate
         self.expectile = expectile
         self.awaken_step = None
-        self.use_sensor = use_sensor
         self.state_dim = state_dim
 
         # models
         self.encoder = Encoder(obs_shape).to(device)
         self.actor = Actor(self.encoder.repr_dim, action_shape, feature_dim,
-                           hidden_dim, use_sensor, state_dim).to(device)
+                           hidden_dim, state_dim).to(device)
         self.value_predictor = VNetwork(self.encoder.repr_dim, feature_dim,
-                                        hidden_dim, use_sensor, state_dim).to(device)
+                                        hidden_dim, state_dim).to(device)
 
         self.critic = Critic(self.encoder.repr_dim, action_shape, feature_dim,
-                             hidden_dim,  use_sensor, state_dim).to(device)
+                             hidden_dim, state_dim).to(device)
         self.critic_target = Critic(self.encoder.repr_dim, action_shape,
-                                    feature_dim, hidden_dim, use_sensor, state_dim).to(device)
+                                    feature_dim, hidden_dim, state_dim).to(device)
         self.critic_target.load_state_dict(self.critic.state_dict())
 
         # optimizers
@@ -419,29 +411,22 @@ class DrMAgent:
 
         return metrics
 
-    def reset(self):
-        utils.reset(self.actor, self.actor_opt, self.perturb_factor)
-        utils.reset(self.critic, self.critic_opt, self.perturb_factor)
-        utils.reset(self.critic_target, self.critic_opt, self.perturb_factor)
-        utils.reset(self.encoder, self.encoder_opt, self.perturb_factor)
-        utils.reset(self.value_predictor, self.predictor_opt,
-                    self.perturb_factor)
+    def perturb(self):
+        utils.perturb(self.actor, self.actor_opt, self.perturb_factor)
+        utils.perturb(self.critic, self.critic_opt, self.perturb_factor)
+        utils.perturb(self.critic_target, self.critic_opt, self.perturb_factor)
+        utils.perturb(self.encoder, self.encoder_opt, self.perturb_factor)
+        utils.perturb(self.value_predictor, self.predictor_opt, self.perturb_factor)
 
     def update(self, replay_iter, step):
         metrics = dict()
 
-        # if step % self.dormant_perturb_interval == 0:
-        #     self.reset()
+        if step % self.dormant_perturb_interval == 0:
+            self.perturb()
 
         batch = next(replay_iter)
-        if self.use_sensor:
-            obs, action, reward, discount, next_obs, obs_sensor, next_obs_sensor = utils.to_torch(
-                batch, self.device)
-        else:
-            obs, action, reward, discount, next_obs = utils.to_torch(
-                batch, self.device)
-            obs_sensor = None
-            next_obs_sensor = None
+        obs, action, reward, discount, next_obs, obs_sensor, next_obs_sensor = utils.to_torch(
+            batch, self.device)
 
         # augment
         obs = self.aug(obs.float())
