@@ -1,0 +1,7 @@
+defaults:
+  - medium
+  - _self_
+
+task_name: cartpole_swingup_sparse
+agent:
+  max_perturb_factor: 0.9

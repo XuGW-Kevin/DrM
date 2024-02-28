@@ -1,0 +1,7 @@
+defaults:
+  - medium
+  - _self_
+
+task_name: cheetah_run
+agent:
+  max_perturb_factor: 0.9
