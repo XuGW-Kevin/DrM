@@ -4,5 +4,5 @@ defaults:
 
 task_name: reacher_hard
 agent:
-  max_perturb_factor: 0.9
+  max_perturb_factor: 1.0
   target_lambda: 0.5

@@ -4,5 +4,5 @@ defaults:
 
 task_name: hopper_hop
 agent:
-  max_perturb_factor: 0.9
-  target_lambda: 0.5
+  max_perturb_factor: 0.6
+  target_lambda: 0.3
