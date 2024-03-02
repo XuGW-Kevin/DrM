@@ -33,9 +33,9 @@ class VideoRecorder:
     def save(self, file_name):
         if self.enabled:
             path = self.save_dir / file_name
-            if "adroit" in file_name:
+            if "adroit" in str(self.save_dir):
                 import numpy as np
-                self.frames = (np.array(self.frames).transpose(0, 2, 3, 1)).tolist()
+                self.frames = np.array(self.frames, dtype=np.uint8).transpose(0, 2, 3, 1)
             imageio.mimsave(str(path), self.frames, fps=self.fps)
 
 
