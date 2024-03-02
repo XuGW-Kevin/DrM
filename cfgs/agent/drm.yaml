@@ -8,7 +8,6 @@ agent:
   dormant_threshold: 0.025
   target_dormant_ratio: 0.2
   dormant_temp: 10
-  target_lambda: 0.6
   lambda_temp: 50
   dormant_perturb_interval: 100000
   min_perturb_factor: 0.2

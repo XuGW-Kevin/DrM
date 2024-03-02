@@ -7,3 +7,4 @@ lr: 8e-5
 feature_dim: 100
 agent:
   max_perturb_factor: 0.6
+  target_lambda: 0.6

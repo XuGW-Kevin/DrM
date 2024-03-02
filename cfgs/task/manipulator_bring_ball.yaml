@@ -6,3 +6,4 @@ task_name: manipulator_bring_ball
 lr: 8e-5
 agent:
   max_perturb_factor: 0.9
+  target_lambda: 0.6
