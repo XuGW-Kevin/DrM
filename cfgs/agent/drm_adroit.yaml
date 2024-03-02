@@ -1,8 +1,8 @@
+frame_stack: 1
 agent:
   _target_: agents.drm_adroit.DrMAgent
   obs_shape: ??? # to be specified later
   action_shape: ??? # to be specified later
-  use_sensor: ??? # to be specified later
   state_dim: ??? # to be specified later
   device: ${device}
   lr: ${lr}
