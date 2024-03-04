@@ -5,4 +5,5 @@ defaults:
 task_name: quadruped_run
 replay_buffer_size: 100000
 agent:
-  max_perturb_factor: 0.9
+  max_perturb_factor: 0.6
+  target_lambda: 0.3

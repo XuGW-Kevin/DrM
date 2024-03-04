@@ -5,5 +5,5 @@ defaults:
 task_name: walker_run
 batch_size: 512
 agent:
-  max_perturb_factor: 0.9
-  target_lambda: 0.5
+  max_perturb_factor: 0.6
+  target_lambda: 0.3
