@@ -23,9 +23,6 @@ Next, install the additional dependencies required for MetaWorld and Adroit.
 cd metaworld
 pip install -e .
 cd ..
-cd mujoco-py
-pip install -e .
-cd ..
 cd rrl-dependencies
 pip install -e .
 cd mj_envs
