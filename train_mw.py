@@ -15,12 +15,13 @@ import utils
 import torch
 from dm_env import specs
 
-import mw
+import metaworld_env as mw
 
 from logger import Logger
 from replay_buffer import ReplayBufferStorage, make_replay_loader
 from video import TrainVideoRecorder, VideoRecorder
 import wandb
+import math
 import re
 
 torch.backends.cudnn.benchmark = True
@@ -47,7 +48,13 @@ class Workspace:
         utils.set_seed_everywhere(cfg.seed)
         self.device = torch.device(cfg.device)
         self._discount = cfg.discount
+        self._discount_alpha = cfg.discount_alpha
+        self._discount_alpha_temp = cfg.discount_alpha_temp
+        self._discount_beta = cfg.discount_beta
+        self._discount_beta_temp = cfg.discount_beta_temp
         self._nstep = cfg.nstep
+        self._nstep_alpha = cfg.nstep_alpha
+        self._nstep_alpha_temp = cfg.nstep_alpha_temp
         self.setup()
         self.agent = make_agent(self.train_env.observation_spec(),
                                 self.train_env.action_spec(), self.cfg.agent)
@@ -77,8 +84,8 @@ class Workspace:
             self.work_dir / 'buffer', self.cfg.replay_buffer_size,
             self.cfg.batch_size,
             self.cfg.replay_buffer_num_workers, self.cfg.save_snapshot,
-            self._nstep,
-            self._discount)
+            math.floor(self._nstep + self._nstep_alpha),
+            self._discount - self._discount_alpha - self._discount_beta)
         self._replay_iter = None
 
         #self.video_recorder = VideoRecorder(
@@ -104,30 +111,43 @@ class Workspace:
             self._replay_iter = iter(self.replay_loader)
         return self._replay_iter
 
+    @property
+    def discount(self):
+        return self._discount - self._discount_alpha * math.exp(
+            -self.global_step /
+            self._discount_alpha_temp) - self._discount_beta * math.exp(
+                -self.global_step / self._discount_beta_temp)
+
+    @property
+    def nstep(self):
+        return math.floor(self._nstep + self._nstep_alpha *
+                          math.exp(-self.global_step / self._nstep_alpha_temp))
+
+    def update_buffer(self):
+        #self.buffer.update_discount(self.discount)
+        self.buffer.update_nstep(self.nstep)
+        return
+
     def eval(self):
-        step, episode, total_reward, success_count = 0, 0, 0, 0
+        step, episode, total_reward, total_sr = 0, 0, 0, 0
         eval_until_episode = utils.Until(self.cfg.num_eval_episodes)
-        #save_num = 0
+
         while eval_until_episode(episode):
-            #frames = []
+            episode_sr = False
             time_step = self.eval_env.reset()
             #self.video_recorder.init(self.eval_env, enabled=(episode == 0))
             while not time_step.last():
                 with torch.no_grad(), utils.eval_mode(self.agent):
-                    #if self.global_frame > 1000000 and len(frames) < 100:
-                        #frame = self.eval_env.render(resolution=(256, 256), camera_name='corner2').copy()
-                        #frames.append(frame)
+
                     action = self.agent.act(time_step.observation,
                                             self.global_step,
                                             eval_mode=True)
                 time_step = self.eval_env.step(action)
-                #self.video_recorder.record(self.eval_env)
+                episode_sr = episode_sr or time_step.success
                 total_reward += time_step.reward
                 step += 1
-                if time_step.success:
-                    success_count += 1
-                    break
 
+            total_sr += episode_sr
             episode += 1
 
             #if self.global_frame > 1000000 and success > 0 and save_num < 4:
@@ -137,11 +157,11 @@ class Workspace:
             #self.video_recorder.save(f'{self.global_frame}.mp4')
 
         with self.logger.log_and_dump_ctx(self.global_frame, ty='eval') as log:
+            log('episode_success_rate', total_sr / episode)
             log('episode_reward', total_reward / episode)
             log('episode_length', step * self.cfg.action_repeat / episode)
             log('episode', self.global_episode)
             log('step', self.global_step)
-            log('success_rate', success_count / episode * 100)
 
     def train(self):
         # predicates
@@ -152,16 +172,19 @@ class Workspace:
         eval_every_step = utils.Every(self.cfg.eval_every_frames,
                                       self.cfg.action_repeat)
 
-        episode_step, episode_reward = 0, 0
+        episode_step, episode_reward, episode_sr = 0, 0, False
         time_step = self.train_env.reset()
         self.replay_storage.add(time_step)
-        #self.train_video_recorder.init(time_step.observation)
+        # self.train_video_recorder.init(time_step.observation)
         metrics = None
         while train_until_step(self.global_step):
             if time_step.last():
                 self._global_episode += 1
-                #self.train_video_recorder.save(f'{self.global_frame}.mp4')
-                # wait until all the metrics schema is populated
+                # self.train_video_recorder.save(f'{self.global_frame}.mp4')
+
+                # reset env
+                time_step = self.train_env.reset()
+                self.replay_storage.add(time_step)                # wait until all the metrics schema is populated
                 if metrics is not None:
                     # log stats
                     elapsed_time, total_time = self.timer.reset()
@@ -170,6 +193,7 @@ class Workspace:
                                                       ty='train') as log:
                         log('fps', episode_frame / elapsed_time)
                         log('total_time', total_time)
+                        log('episode_success_rate', episode_sr)
                         log('episode_reward', episode_reward)
                         log('episode_length', episode_frame)
                         log('episode', self.global_episode)
@@ -179,10 +203,11 @@ class Workspace:
                 # reset env
                 time_step = self.train_env.reset()
                 self.replay_storage.add(time_step)
-                #self.train_video_recorder.init(time_step.observation)
+                # self.train_video_recorder.init(time_step.observation)
                 # try to save snapshot
                 if self.cfg.save_snapshot:
                     self.save_snapshot()
+                episode_sr = False
                 episode_step = 0
                 episode_reward = 0
 
@@ -199,11 +224,9 @@ class Workspace:
                                         eval_mode=False)
 
             # try to update the agent
-            if not seed_until_step(self.global_step):
+            if not seed_until_step(self.global_step) and self.global_step % self.cfg.update_every_steps == 0:   
                 metrics = self.agent.update(
-                    self.replay_iter, self.global_step
-                ) if self.global_step % self.cfg.update_every_steps == 0 else dict(
-                )
+                    self.replay_iter, self.global_step)
                 self.logger.log_metrics(metrics, self.global_frame, ty='train')
 
             # take env step

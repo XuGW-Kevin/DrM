@@ -1,2 +1,10 @@
-num_train_frames: 2000000
+num_train_frames: 2100000
+nstep_alpha_temp: 1000000
+discount_alpha_temp: 500000
+discount_beta_temp: 1600000
 stddev_schedule: 'linear(1.0,0.1,500000)'
+discount: 0.997
+discount_alpha: 0.02
+discount_beta: 0.007
+nstep: 3
+nstep_alpha: 7
