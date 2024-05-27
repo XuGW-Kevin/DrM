@@ -146,7 +146,7 @@ class DrMAgent:
     def __init__(self, obs_shape, action_shape, device, lr, feature_dim,
                  hidden_dim, critic_target_tau, dormant_threshold,
                  target_dormant_ratio, dormant_temp,dormant_perturb_interval,
-                 min_perturb_factor, max_perturb_factor, perturb_rate,
+                 min_perturb_factor, max_perturb_factor, perturb_rate, target_lambda,
                  num_expl_steps, stddev_type, stddev_schedule, stddev_clip,
                  expectile, use_tb):
         self.device = device
@@ -164,6 +164,7 @@ class DrMAgent:
         self.max_perturb_factor = max_perturb_factor
         self.perturb_rate = perturb_rate
         self.dormant_ratio = 1
+        self.target_lambda = target_lambda
         self.expectile = expectile
         self.awaken_step = None
 
@@ -270,7 +271,7 @@ class DrMAgent:
             target_Q1, target_Q2 = self.critic_target(next_obs, next_action)
             target_V_explore = torch.min(target_Q1, target_Q2)
             target_V_exploit = self.value_predictor(next_obs)
-            lambda_ = 0.5  #max(0, 0.5 - 2.5 * self.dormant_ratio)
+            lambda_ = self.target_lambda
             target_V = lambda_ * target_V_exploit + (
                 1 - lambda_) * target_V_explore
             target_Q = reward + (discount * target_V)

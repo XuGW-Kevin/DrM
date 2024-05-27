@@ -7,6 +7,7 @@ agent:
   critic_target_tau: 0.01
   dormant_threshold: 0.025
   target_dormant_ratio: 0.2
+  target_lambda: 0.5
   dormant_temp: 10
   dormant_perturb_interval: 100000
   min_perturb_factor: 0.2
