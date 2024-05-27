@@ -32,6 +32,12 @@ cd mjrl
 pip install -e .
 ```
 
+Tips: please check that your mujoco_py can use gpu render to improve FPS in training.
+```
+mujoco_py.cymj
+<module 'cymj' from './anaconda3/envs/drm/lib/python3.8/site-packages/mujoco_py/generated/cymj_2.1.2.14_38_linuxcpuextensionbuilder_38.so'>
+```
+
 ## 💻 Code Usage
 If you would like to run DrM on [DeepMind Control Suite](https://github.com/google-deepmind/dm_control), please use train_dmc.py to train DrM policies on different configs.
 
