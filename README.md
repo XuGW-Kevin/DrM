@@ -42,7 +42,8 @@ python train_dmc.py task=dog_walk agent=drm
 If you would like to run DrM on [MetaWorld](https://meta-world.github.io/), please use train_mw.py to train DrM policies on different configs.
 
 ```bash
-python train_mw.py task=sweep-into agent=drm_mw
+python train_mw.py task=coffee-push agent=drm_mw
+python train_mw.py task=disassemble agent=drm_mw
 ```
 
 If you would like to run DrM on Adroit, please use train_adroit.py to train DrM policies on different configs.
