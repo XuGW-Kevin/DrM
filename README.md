@@ -32,10 +32,11 @@ cd mjrl
 pip install -e .
 ```
 
-Tips: please check that your mujoco_py can use gpu render to improve FPS in training.
+Tips: please check that your mujoco_py can use gpu render to improve FPS during training.
+
 ```
 mujoco_py.cymj
-<module 'cymj' from './anaconda3/envs/drm/lib/python3.8/site-packages/mujoco_py/generated/cymj_2.1.2.14_38_linuxcpuextensionbuilder_38.so'>
+<module 'cymj' from './mujoco_py/generated/cymj_2.1.2.14_38_linuxgpuextensionbuilder_38.so'>
 ```
 
 ## 💻 Code Usage
