@@ -195,7 +195,7 @@ def make(name, frame_stack, action_repeat, seed):
     env = ActionDTypeWrapper(env, np.float32)
     env = ActionRepeatWrapper(env, action_repeat)
     env = action_scale.Wrapper(env, minimum=-1.0, maximum=+1.0)
-    # add renderings for clasical tasks
+    # add renderings for classical tasks
     if (domain, task) in suite.ALL_TASKS:
         # zoom in camera for quadruped
         camera_id = dict(quadruped=2).get(domain, 0)
