@@ -1,3 +1,5 @@
+
+
 # DrM: Mastering Visual Reinforcement Learning through Dormant Ratio Minimization
 <p align="center" style="font-size: 50px">
    <a href="https://arxiv.org/abs/2310.19668">[Paper]</a>&emsp;<a href="https://guoweixu.com/drm/">[Project Website]</a>
@@ -35,7 +37,7 @@ pip install -e .
 Tips: please check that your mujoco_py can use gpu render to improve FPS during training.
 
 ```
-mujoco_py.cymj
+python -c "import mujoco_py.cymj; print(mujoco_py.cymj)"
 <module 'cymj' from './mujoco_py/generated/cymj_2.1.2.14_38_linuxgpuextensionbuilder_38.so'>
 ```
 
